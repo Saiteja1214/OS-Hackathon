@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multilevel Feedback Queue Scheduler</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f7f7f7;
+            line-height: 1.6;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 15px;
+        }
+        form {
+            margin-bottom: 20px;
+            background: #fff;
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 10px;
+        }
+        label {
+            display: inline-block;
+            width: 150px;
+            margin-top: 5px;
+            font-weight: bold;
+        }
+        input {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 250px;
+        }
+        button {
+            margin-top: 10px;
+            padding: 8px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .button-group {
+            margin: 15px 0;
+        }
+        .reset-button {
+            background-color: #f44336;
+        }
+        .reset-button:hover {
+            background-color: #d32f2f;
+        }
+        .info-button {
+            background-color: #2196F3;
+        }
+        .info-button:hover {
+            background-color: #0b7dda;
+        }
+        hr {
+            margin: 20px 0;
+            border: 0;
+            border-top: 1px solid #ddd;
+        }
+        .result-box {
+            background: #fff;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px 8px;
+            text-align: left;
+        }
+        th {
+            background: #f2f2f2;
+            font-weight: bold;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        tr:hover {
+            background-color: #f1f1f1;
+        }
+        .error {
+            color: #f44336;
+            margin-top: 5px;
+        }
+        .success {
+            color: #4CAF50;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Multilevel Feedback Queue Scheduler</h1>
+        <p>This simulator implements a multilevel feedback queue scheduler similar to the 4.4BSD scheduler.</p>
+
+        <!-- Form to Add a New Thread -->
+        <h2>Add Thread</h2>
+        <form id="addThreadForm">
+            <div class="form-group">
+                <label for="tid">Thread ID:</label>
+                <input type="text" id="tid" required>
+            </div>
+            <div class="form-group">
+                <label for="burst_time">Burst Time (ticks):</label>
+                <input type="number" id="burst_time" required min="1">
+            </div>
+            <div class="form-group">
+                <label for="nice">Nice Value (-20 to 20):</label>
+                <input type="number" id="nice" value="0" min="-20" max="20">
+            </div>
+            <button type="submit">Add Thread</button>
+            <div id="addThreadResult"></div>
+        </form>
+
+        <hr>
+
+        <!-- Buttons to Run or Reset Simulation -->
+        <div class="button-group">
+            <button type="button" onclick="runScheduler()" class="info-button">Run Scheduler</button>
+            <button type="button" onclick="resetSimulation()" class="reset-button">Reset Simulation</button>
+        </div>
+
+        <hr>
+
+        <!-- Form to Change a Thread's Nice Value -->
+        <h2>Set Thread Nice Value</h2>
+        <form id="setNiceForm">
+            <div class="form-group">
+                <label for="set_tid">Thread ID:</label>
+                <input type="text" id="set_tid" required>
+            </div>
+            <div class="form-group">
+                <label for="new_nice">New Nice Value:</label>
+                <input type="number" id="new_nice" required min="-20" max="20">
+            </div>
+            <button type="submit">Set Nice</button>
+            <div id="setNiceResult"></div>
+        </form>
+
+        <hr>
+
+        <!-- Form to Get Thread Information -->
+        <h2>Get Thread Info</h2>
+        <form id="getThreadForm">
+            <div class="form-group">
+                <label for="info_tid">Thread ID:</label>
+                <input type="text" id="info_tid" required>
+            </div>
+            <button type="submit">Get Thread Info</button>
+        </form>
+        <div id="threadInfo" class="result-box" style="display: none;"></div>
+
+        <hr>
+
+        <!-- Button to Get Load Average -->
+        <h2>System Load Average</h2>
+        <button type="button" onclick="getLoadAvg()" class="info-button">Get Load Average</button>
+        <div id="loadAvg" class="result-box" style="display: none;"></div>
+
+        <hr>
+
+        <!-- Schedule Log Table -->
+        <h2>Schedule Log</h2>
+        <div id="tableContainer">
+            <table>
+                <thead>
+                    <tr>
+                        <th scope="col">Tick</th>
+                        <th scope="col">Thread ID</th>
+                        <th scope="col">Priority</th>
+                        <th scope="col">Remaining Time</th>
+                      </tr>
+                </thead>
+                <tbody id="scheduleLog"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // Add Thread form handler
+        document.getElementById("addThreadForm").addEventListener("submit", async function(e) {
+            e.preventDefault();
+            const tid = document.getElementById("tid").value;
+            const burst_time = parseInt(document.getElementById("burst_time").value);
+            const nice = parseInt(document.getElementById("nice").value) || 0;
+            
+            try {
+                const response = await fetch("/add_thread", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({ tid, burst_time, nice })
+                });
+                
+                const data = await response.json();
+                const resultDiv = document.getElementById("addThreadResult");
+                
+                if (response.ok) {
+                    resultDiv.textContent = data.message;
+                    resultDiv.className = "success";
+                    // Reset form fields
+                    document.getElementById("tid").value = "";
+                    document.getElementById("burst_time").value = "";
+                    document.getElementById("nice").value = "0";
+                } else {
+                    resultDiv.textContent = data.error;
+                    resultDiv.className = "error";
+                }
+            } catch (error) {
+                document.getElementById("addThreadResult").textContent = "Network error: " + error.message;
+                document.getElementById("addThreadResult").className = "error";
+            }
+        });
+        
+        // Set Thread Nice form handler
+        document.getElementById("setNiceForm").addEventListener("submit", async function(e) {
+            e.preventDefault();
+            const tid = document.getElementById("set_tid").value;
+            const new_nice = parseInt(document.getElementById("new_nice").value);
+            
+            try {
+                const response = await fetch("/set_thread_nice", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({ tid, nice: new_nice })
+                });
+                
+                const data = await response.json();
+                const resultDiv = document.getElementById("setNiceResult");
+                
+                if (response.ok) {
+                    resultDiv.textContent = data.message;
+                    resultDiv.className = "success";
+                    // Reset form fields
+                    document.getElementById("set_tid").value = "";
+                    document.getElementById("new_nice").value = "";
+                } else {
+                    resultDiv.textContent = data.error;
+                    resultDiv.className = "error";
+                }
+            } catch (error) {
+                document.getElementById("setNiceResult").textContent = "Network error: " + error.message;
+                document.getElementById("setNiceResult").className = "error";
+            }
+        });
+        
+        // Get Thread Info form handler
+        document.getElementById("getThreadForm").addEventListener("submit", async function(e) {
+            e.preventDefault();
+            const tid = document.getElementById("info_tid").value;
+            const threadInfoDiv = document.getElementById("threadInfo");
+            
+            try {
+                // First fetch nice value
+                const niceResponse = await fetch(`/get_thread_nice/${tid}`);
+                const niceData = await niceResponse.json();
+                
+                if (!niceResponse.ok) {
+                    threadInfoDiv.textContent = niceData.error;
+                    threadInfoDiv.className = "result-box error";
+                    threadInfoDiv.style.display = "block";
+                    return;
+                }
+                
+                // Then fetch recent CPU value
+                const rcpuResponse = await fetch(`/get_recent_cpu/${tid}`);
+                const rcpuData = await rcpuResponse.json();
+                
+                if (!rcpuResponse.ok) {
+                    threadInfoDiv.textContent = rcpuData.error;
+                    threadInfoDiv.className = "result-box error";
+                    threadInfoDiv.style.display = "block";
+                    return;
+                }
+                
+                // Display both pieces of information
+                threadInfoDiv.innerHTML = `
+                    <h3>Thread ${tid} Information</h3>
+                    <p><strong>Nice Value:</strong> ${niceData.nice}</p>
+                    <p><strong>Recent CPU:</strong> ${rcpuData.recent_cpu}</p>
+                `;
+                threadInfoDiv.className = "result-box";
+                threadInfoDiv.style.display = "block";
+                
+            } catch (error) {
+                threadInfoDiv.textContent = "Network error: " + error.message;
+                threadInfoDiv.className = "result-box error";
+                threadInfoDiv.style.display = "block";
+            }
+        });
+        
+        // Run Scheduler button handler
+        async function runScheduler() {
+            try {
+                const response = await fetch("/run_scheduler");
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    alert(data.error || "Failed to run scheduler");
+                    return;
+                }
+                
+                const log = data.schedule;
+                const tableBody = document.getElementById("scheduleLog");
+                tableBody.innerHTML = "";
+                
+                if (log.length === 0) {
+                    const row = document.createElement("tr");
+                    row.innerHTML = "<td colspan='4'>No scheduling data available. Add some threads first.</td>";
+                    tableBody.appendChild(row);
+                    return;
+                }
+                
+                log.forEach(entry => {
+                    const row = document.createElement("tr");
+                    row.innerHTML = `
+                        <td>${entry.tick}</td>
+                        <td>${entry.tid}</td>
+                        <td>${entry.priority}</td>
+                        <td>${entry.remaining_time}</td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+                
+                // Scroll to the schedule log table
+                document.querySelector('h2:last-of-type').scrollIntoView({ behavior: 'smooth' });
+                
+            } catch (error) {
+                alert("Error running scheduler: " + error.message);
+            }
+        }
+        
+        // Reset Simulation button handler
+        async function resetSimulation() {
+            try {
+                const response = await fetch("/reset");
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // Clear all result displays
+                    document.getElementById("scheduleLog").innerHTML = "";
+                    document.getElementById("threadInfo").style.display = "none";
+                    document.getElementById("loadAvg").style.display = "none";
+                    document.getElementById("addThreadResult").textContent = "";
+                    document.getElementById("setNiceResult").textContent = "";
+                    
+                    alert(data.message || "Simulation reset successfully");
+                } else {
+                    alert(data.error || "Failed to reset simulation");
+                }
+            } catch (error) {
+                alert("Error resetting simulation: " + error.message);
+            }
+        }
+        
+        // Get Load Average button handler
+        async function getLoadAvg() {
+            const loadAvgDiv = document.getElementById("loadAvg");
+            
+            try {
+                const response = await fetch("/get_load_avg");
+                const data = await response.json();
+                
+                if (response.ok) {
+                    loadAvgDiv.innerHTML = `
+                        <h3>System Load Average</h3>
+                        <p>Current Load Average: <strong>${data.load_avg}</strong></p>
+                    `;
+                    loadAvgDiv.className = "result-box";
+                    loadAvgDiv.style.display = "block";
+                } else {
+                    loadAvgDiv.textContent = data.error || "Failed to get load average";
+                    loadAvgDiv.className = "result-box error";
+                    loadAvgDiv.style.display = "block";
+                }
+            } catch (error) {
+                loadAvgDiv.textContent = "Network error: " + error.message;
+                loadAvgDiv.className = "result-box error";
+                loadAvgDiv.style.display = "block";
+            }
+        }
+    </script>
+</body>
+</html>
